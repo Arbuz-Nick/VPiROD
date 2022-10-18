@@ -1,34 +1,38 @@
 #!/usr/bin/python3
 
 
-import sys, os, argparse, subprocess
+import sys
+import os
+import argparse
+import subprocess
+import pika
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-o", "--osm", help="Filename for .osm input", default="map.osm"
+        "-k", help="Number of random sends in epidemia protocol", default=1
     )
     parser.add_argument(
-        "-p", "--proc", help="Number of process for data keepers", type=int, default=1
+        "-p", "--proc", help="Number of process for data keepers", default=1
     )
     args = parser.parse_args()
 
     print(args)
     log_file = open("./log.txt", "w+")
-    data_keeper = []
+    replica = []
+    #subprocess.Popen(["export PATH=$PATH:/usr/local/sbin"])
+    #rabbitmq_server = subprocess.Popen(["rabbitmq-server"], stdout=log_file)
 
-    manager = subprocess.Popen(["python", "./manager.py"])#, stdout=log_file)
     for i in range(args.proc):
-        data_keeper.append(
-            subprocess.Popen(["python", "./data_keeper.py", str(i)], stdout=log_file)
+        replica.append(
+            subprocess.Popen(
+                ["python", "./replica.py", "-i", str(i), "-k", args.k], stdout=log_file)
         )
-    ETL = subprocess.Popen(
-        ["python", "./ETL.py", str(args.proc), args.osm], stdout=log_file
-        )
-    client = subprocess.Popen(["python", "./client.py"])
-    manager.wait()
-    print(manager)
+#    client = subprocess.Popen(["python", "./client.py"])
+    replica[0].wait()
+    print(replica[0])
+#    client.wait()
 
 
 if __name__ == "__main__":
