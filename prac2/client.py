@@ -1,6 +1,7 @@
 import pika
 import sys
 import os
+import json
 
 
 connection = pika.BlockingConnection(
@@ -27,12 +28,12 @@ class Client:
             self.get_value()
 
     def send_value(self):
-        exchange = "client-main"
-        routing_key = "new_vals"
+        exchange = "client-replica"
+        routing_key = "r_0"
 
         channel.exchange_declare(exchange=exchange, exchange_type="direct")
         channel.basic_publish(
-            exchange=exchange, routing_key=routing_key, body=(self.var+" "+self.val))
+            exchange=exchange, routing_key=routing_key, body=json.dumps({"from": "client", "data": {"name": self.var, "val": self.val}}))
 
     def do_stuff(self):
         print("Press Ctrl-C to finish.")

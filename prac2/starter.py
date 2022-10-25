@@ -11,10 +11,10 @@ import pika
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-k", help="Number of random sends in epidemia protocol", default=1
+        "-k", help="Number of random sends in epidemia protocol", default=1, type=int
     )
     parser.add_argument(
-        "-p", "--proc", help="Number of process for data keepers", default=1
+        "-p", "--proc", help="Number of process for data keepers", default=1, type=int
     )
     args = parser.parse_args()
 
@@ -27,7 +27,9 @@ def main():
     for i in range(args.proc):
         replica.append(
             subprocess.Popen(
-                ["python", "./replica.py", "-i", str(i), "-k", args.k], stdout=log_file)
+                ["python3", "./replica.py", "-i",
+                    str(i), "-k", str(args.k), "-n", str(args.proc)]
+            )
         )
 #    client = subprocess.Popen(["python", "./client.py"])
     replica[0].wait()
