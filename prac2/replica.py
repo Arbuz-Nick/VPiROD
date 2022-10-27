@@ -6,6 +6,7 @@ import argparse
 import sys
 import os
 from random import randint
+import time
 
 from torch import wait
 
@@ -24,8 +25,6 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-print(args)
-
 
 class Replica():
     data = dict()
@@ -43,8 +42,8 @@ class Replica():
                 self.new_val)
         )
 
-    def get_val(self, exchange="main"):
-        self.consumer_tag = "r_" + str(args.id)
+    def get_val(self, exchange="main", queue="r_" + str(args.id)):
+        self.consumer_tag = queue
         channel.exchange_declare(exchange=exchange, exchange_type="direct")
         queue_name = self.consumer_tag
         channel.queue_declare(queue=queue_name, exclusive=False)
@@ -55,13 +54,16 @@ class Replica():
             on_message_callback=self.handler,
             auto_ack=True,
             consumer_tag=self.consumer_tag,
-            exclusive=False,
+            exclusive=False
         )
+        #channel.basic_qos(prefetch_count=1, global_qos=False)
         channel.start_consuming()
 
     def notify_main(self):
-        exchange = "main"
-        routing_key = "r_0"
+        exchange = "to_main"
+        routing_key = "notify"
+        # print("Replica {}: Notify".format(
+        #    str(args.id)))
         channel.exchange_declare(exchange=exchange, exchange_type="direct")
         channel.basic_publish(
             exchange=exchange, routing_key=routing_key, body=json.dumps({"from": "r_" + str(args.id), "data": self.new_val}))
@@ -69,19 +71,20 @@ class Replica():
     def epidemia(self):
         i = 0
         while i < args.k:
+            i += 1
             if (args.rnum > 2) or (args.id == 0):
                 id = randint(1, args.rnum - 1)
                 if id == args.id:
+                    i -= 1
                     continue
+                #print("From", args.id, "to", id)
                 self.send(id)
-            i += 1
+                # time.sleep(1)
 
     def save_new_val(self):
         if self.new_val["name"] in self.data.keys():
-            if self.data[self.new_val["name"]][0] < self.new_val["id"]:
-
-                self.data[self.new_val["name"]][0] = self.new_val["id"]
-                self.data[self.new_val["name"]][1] = self.new_val["val"]
+            self.data[self.new_val["name"]][0] = self.new_val["id"]
+            self.data[self.new_val["name"]][1] = self.new_val["val"]
         else:
             self.data[self.new_val["name"]] = [
                 self.new_val["id"], self.new_val["val"]]
@@ -89,44 +92,77 @@ class Replica():
     def working(self):
         while True:
             self.get_val(exchange="main")
-            self.notify_main()
-            print("Replica {}: Got value:".format(
-                str(args.id)), self.new_val)
-            self.save_new_val()
-
-            if args.rnum > 1:
-                self.epidemia()
+            # print("Replica {}: Got value:".format(
+            #    str(args.id)), self.new_val)
+            # print("Replica {}:".format(
+            #     str(args.id)), "\n\tnew_val:", self.new_val, "\n\tdata:", self.data)
+            if (self.new_val["name"] not in self.data.keys()) or (self.data[self.new_val["name"]][0] < self.new_val["id"]):
+                self.notify_main()
+                self.save_new_val()
+                if args.rnum > 1:
+                    self.epidemia()
 
 
 class MainReplica(Replica):
 
     ids = dict()
 
+    def get_notify(self):
+        method_frame, header_frame, body = channel.basic_get(queue="notify",
+                                                             auto_ack=False)
+        if method_frame:
+            #print(method_frame, header_frame, json.loads(body.decode("utf-8")))
+            channel.basic_ack(method_frame.delivery_tag)
+            self.new_val = json.loads(body.decode("utf-8"))
+        return method_frame
+
     def waiting(self):
         replicas = dict(("r_" + str(i), 1) for i in range(1, args.rnum))
+        exchange = "to_main"
+        channel.exchange_declare(exchange=exchange, exchange_type="direct")
+        queue_name = "notify"
+        channel.queue_declare(queue=queue_name, exclusive=False)
+        channel.queue_bind(exchange=exchange, queue=queue_name)
+
+        i = 0
         while sum(replicas.values()):
-            self.get_val(exchange="main")
-            replicas[self.new_val["from"]] = 0
+            i += 1
+            #self.get_val(exchange="to_main", queue="notify")
+            time.sleep(0.03)
+            method_frame = self.get_notify()
+            if method_frame:
+                replicas[self.new_val["from"]] = 0
+                # print("Main Got", self.new_val, '\n\t left:', [
+                #    key for key in replicas.keys() if replicas[key] > 0])
+            if i > 200:
+                i = 0
+                self.new_val = self.new_val["data"]
+                [self.send(int(key.replace("r_", "")))
+                 for key in replicas.keys() if replicas[key] > 0]
 
     def get_id(self, name):
-        if name in self.ids.keys():
-            self.ids[name] += 1
-        else:
-            self.ids[name] = 0
-        return self.ids[name]
+        if name in self.data.keys():
+            return self.data[name][0] + 1
+        return 0
 
     def working(self):
         while True:
-            self.get_val(exchange="client-replica")
+            self.get_val(exchange="client-replica", queue="income")
+            #print("Got:", self.new_val)
             if self.new_val["from"] == "client":
-                self.new_val = {"id": 0, "name": self.new_val["data"]["name"], "val": self.new_val["data"]["val"]}
+                self.new_val = {
+                    "id": 0, "name": self.new_val["data"]["name"], "val": self.new_val["data"]["val"]}
                 self.new_val["id"] = self.get_id(self.new_val["name"])
                 val = self.new_val
                 self.save_new_val()
+                # print("Saved")
                 if args.rnum > 1:
                     self.epidemia()
+                #print("Start waiting")
                 self.waiting()
                 print("MainReplica:", val)
+            else:
+                print("Wrong place")
 
 
 try:
@@ -137,7 +173,8 @@ try:
     replica.working()
 
 except KeyboardInterrupt:
-    print("Manager:: Working day is over.")
+    print("Replica {}: Working day is over.".format(
+        str(args.id)))
     try:
         sys.exit(0)
     except SystemExit:

@@ -18,7 +18,6 @@ def main():
     )
     args = parser.parse_args()
 
-    print(args)
     log_file = open("./log.txt", "w+")
     replica = []
     #subprocess.Popen(["export PATH=$PATH:/usr/local/sbin"])

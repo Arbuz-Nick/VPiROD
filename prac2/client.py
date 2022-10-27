@@ -29,7 +29,7 @@ class Client:
 
     def send_value(self):
         exchange = "client-replica"
-        routing_key = "r_0"
+        routing_key = "income"
 
         channel.exchange_declare(exchange=exchange, exchange_type="direct")
         channel.basic_publish(
