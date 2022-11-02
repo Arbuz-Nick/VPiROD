@@ -86,8 +86,8 @@ class Replica():
             self.data[self.new_val["name"]][0] = self.new_val["id"]
             self.data[self.new_val["name"]][1] = self.new_val["val"]
         else:
-            self.data[self.new_val["name"]] = [
-                self.new_val["id"], self.new_val["val"]]
+            self.data[self.new_val["name"]] = [self.new_val["id"],
+                                               self.new_val["val"]]
 
     def working(self):
         while True:
@@ -134,7 +134,7 @@ class MainReplica(Replica):
                 replicas[self.new_val["from"]] = 0
                 # print("Main Got", self.new_val, '\n\t left:', [
                 #    key for key in replicas.keys() if replicas[key] > 0])
-            if i > 200:
+            if i > 100:
                 i = 0
                 self.new_val = self.new_val["data"]
                 [self.send(int(key.replace("r_", "")))

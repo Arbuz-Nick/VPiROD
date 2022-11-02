@@ -1,16 +1,16 @@
 all: make_server make_replicas make_client
 
-make_replicas:
+replicas:
 	ttab -w "sleep 2 ; cd /Users/anr/Desktop/YPiROD/VPiROD/prac2 ; python3 starter.py -k $(k) -p $(p)"
 
-make_server:
+server:
 	brew services start rabbitmq
 
-make_client:
+client:
 	ttab -w "sleep 2 ; python3 client.py"
 
-make stop:
+stop:
 	brew services stop rabbitmq
 
-make restart:
+restart:
 	brew services restart rabbitmq
